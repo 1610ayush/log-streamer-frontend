@@ -4,13 +4,13 @@ import React, { useEffect, useState, useCallback } from "react";
 import { io } from "socket.io-client";
 import axios from "axios";
 
-const socket = io("https://c522-2405-201-d003-d80e-1149-5dc0-5454-a335.ngrok-free.app", {
+const socket = io("https://84af-2405-201-d003-d80e-8a42-deff-7e0e-e768.ngrok-free.app", {
   reconnection: true,
   reconnectionAttempts: 5,
   reconnectionDelay: 1000,
 });
 
-const MAX_LOGS = 1000;
+const MAX_LOGS = 100;
 const INITIAL_FETCH_COUNT = 50;
 
 const initialFilter = { startTime: "", endTime: "" };
@@ -20,26 +20,29 @@ export default function LogStream() {
   const [filter, setFilter] = useState(initialFilter);
   const [searchQuery, setSearchQuery] = useState("");
   const [historicalLogs, setHistoricalLogs] = useState([]);
-  const [isConnected, setIsConnected] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isFiltering, setIsFiltering] = useState(false);
 
   const addLog = useCallback((logData) => {
     setLogs((prevLogs) => {
       const newLogs = [logData, ...prevLogs];
-      return newLogs.slice(0, MAX_LOGS);
+      return newLogs.slice(0, MAX_LOGS); // Ensure we don't exceed MAX_LOGS
     });
   }, []);
 
   useEffect(() => {
     const fetchInitialLogs = async () => {
       try {
-        const response = await axios.get("https://c522-2405-201-d003-d80e-1149-5dc0-5454-a335.ngrok-free.app/logs", {
+        const response = await axios.get("https://84af-2405-201-d003-d80e-8a42-deff-7e0e-e768.ngrok-free.app/logs", {
           params: {
             limit: INITIAL_FETCH_COUNT,
           },
         });
-        setLogs(response.data.reverse());
+        if (Array.isArray(response.data)) {
+          setLogs(response.data); // Assume response.data is an array of log objects
+        } else {
+          console.error("Unexpected response format:", response.data);
+        }
       } catch (error) {
         console.error("Error fetching initial logs:", error);
       }
@@ -48,30 +51,29 @@ export default function LogStream() {
     fetchInitialLogs();
   }, []);
 
-  useEffect(() => {
-    socket.on("connect", () => setIsConnected(true));
-    socket.on("disconnect", () => setIsConnected(false));
-    socket.on("log", addLog);
-
-    return () => {
-      socket.off("connect");
-      socket.off("disconnect");
-      socket.off("log");
-    };
-  }, [addLog]);
+    socket.on("connect", () => console.log("Connected to socket"));
+    socket.on("disconnect", () => console.log("Disconnected from socket"));
+    socket.on("log_received", (data) => {
+      console.log("Log received:", data);
+      addLog(data);
+    });
 
   const fetchLogs = async () => {
     setLoading(true);
     try {
-      const response = await axios.get("https://c522-2405-201-d003-d80e-1149-5dc0-5454-a335.ngrok-free.app/logs", {
+      const response = await axios.get("https://84af-2405-201-d003-d80e-8a42-deff-7e0e-e768.ngrok-free.app/logs", {
         params: {
           startTime: filter.startTime,
           endTime: filter.endTime,
           searchQuery: searchQuery,
         },
       });
-      setHistoricalLogs(response.data);
-      setIsFiltering(true);
+      if (Array.isArray(response.data)) {
+        setHistoricalLogs(response.data); // Set historical logs for filtering
+        setIsFiltering(true);
+      } else {
+        console.error("Unexpected response format:", response.data);
+      }
     } catch (error) {
       console.error("Error fetching logs:", error);
     } finally {
@@ -91,21 +93,23 @@ export default function LogStream() {
     setIsFiltering(false);
   };
 
-  const combinedLogs = isFiltering ? [...logs, ...historicalLogs] : logs;
+  const combinedLogs = isFiltering ? [...historicalLogs, ...logs] : logs;
 
-  const filteredLogs = combinedLogs.filter((log) => {
-    const timestamp = new Date(log.timestamp).getTime();
-    const startMatch = filter.startTime
-      ? timestamp >= new Date(filter.startTime).getTime()
-      : true;
-    const endMatch = filter.endTime
-      ? timestamp <= new Date(filter.endTime).getTime()
-      : true;
-    const searchMatch = searchQuery
-      ? log.log.toLowerCase().includes(searchQuery.toLowerCase())
-      : true;
-    return startMatch && endMatch && searchMatch;
-  });
+  const filteredLogs = Array.isArray(combinedLogs)
+    ? combinedLogs.filter((log) => {
+        const timestamp = new Date(log.timestamp).getTime();
+        const startMatch = filter.startTime
+          ? timestamp >= new Date(filter.startTime).getTime()
+          : true;
+        const endMatch = filter.endTime
+          ? timestamp <= new Date(filter.endTime).getTime()
+          : true;
+        const searchMatch = searchQuery
+          ? log.log.toLowerCase().includes(searchQuery.toLowerCase())
+          : true;
+        return startMatch && endMatch && searchMatch;
+      })
+    : [];
 
   return (
     <div className="container-fluid bg-light min-vh-100">
