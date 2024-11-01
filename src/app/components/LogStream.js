@@ -149,16 +149,22 @@ export default function LogStream() {
 
   const fetchLogs = async () => {
     setLoading(true);
+  
+    const params = {
+      limit: MAX_LOGS,
+      query: searchQuery || ''
+    };
+  
+    if (filter.startTime) {
+      params.startTime = filter.startTime;
+    }
+    if (filter.endTime) {
+      params.endTime = filter.endTime;
+    }
+  
     try {
-      const response = await axiosInstance.get('/logs', {
-        params: {
-          limit: MAX_LOGS,
-          startTime: filter.startTime || '',
-          endTime: filter.endTime || '',
-          query: searchQuery || ''
-        },
-      });
-
+      const response = await axiosInstance.get('/logs', { params });
+  
       if (Array.isArray(response.data)) {
         const normalizedLogs = response.data.map(log => ({
           id: Date.now() + Math.random(),
@@ -176,6 +182,7 @@ export default function LogStream() {
       setLoading(false);
     }
   };
+  
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -192,20 +199,30 @@ export default function LogStream() {
   const combinedLogs = isFiltering ? [...historicalLogs, ...logs] : logs;
 
   const filteredLogs = Array.isArray(combinedLogs)
-    ? combinedLogs.filter((log) => {
-        const timestamp = new Date(log.timestamp).getTime();
-        const startMatch = filter.startTime
-          ? timestamp >= new Date(filter.startTime).getTime()
-          : true;
-        const endMatch = filter.endTime
-          ? timestamp <= new Date(filter.endTime).getTime()
-          : true;
-        const searchMatch = searchQuery
-          ? log.log.toLowerCase().includes(searchQuery.toLowerCase())
-          : true;
-        return startMatch && endMatch && searchMatch;
-      })
-    : [];
+  ? combinedLogs.filter((log) => {
+      const formattedTimestamp = new Date(log.timestamp).toLocaleString();
+      const timestampMatch = searchQuery
+        ? formattedTimestamp.includes(searchQuery)
+        : true;
+      const logMatch = searchQuery
+        ? log.log.toLowerCase().includes(searchQuery.toLowerCase())
+        : true;
+      const containerMatch = searchQuery
+        ? log.container_name.toLowerCase().includes(searchQuery.toLowerCase())
+        : true;
+
+      const timestamp = new Date(log.timestamp).getTime();
+      const startMatch = filter.startTime
+        ? timestamp >= new Date(filter.startTime).getTime()
+        : true;
+      const endMatch = filter.endTime
+        ? timestamp <= new Date(filter.endTime).getTime()
+        : true;
+
+      return startMatch && endMatch && (timestampMatch || logMatch || containerMatch);
+    })
+  : [];
+
 
   return (
     <div className="container-fluid bg-light min-vh-100">
@@ -237,66 +254,70 @@ export default function LogStream() {
             </div>
           )}
 
-          <div className="row mt-4">
-            <div className="col-md-4 mb-2">
-              <label htmlFor="searchQuery" className="form-label">
-                Search:
-              </label>
-              <input
-                type="text"
-                id="searchQuery"
-                className="form-control"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search in logs..."
-              />
+          <form onSubmit={(e) => { e.preventDefault(); handleSearch(); }} className="mt-4">
+            <div className="row row-cols-1 row-cols-md-12 g-3 align-items-end">
+              <div className="col col-md-4">
+                <label htmlFor="searchQuery" className="form-label">
+                  Search:
+                </label>
+                <input
+                  type="text"
+                  id="searchQuery"
+                  className="form-control"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search in logs..."
+                />
+              </div>
+              <div className="col col-md-3">
+                <label htmlFor="startTime" className="form-label">
+                  Start Time:
+                </label>
+                <input
+                  type="datetime-local"
+                  id="startTime"
+                  className="form-control"
+                  value={filter.startTime}
+                  onChange={(e) => setFilter({ ...filter, startTime: e.target.value })}
+                />
+              </div>
+              <div className="col col-md-3">
+                <label htmlFor="endTime" className="form-label">
+                  End Time:
+                </label>
+                <input
+                  type="datetime-local"
+                  id="endTime"
+                  className="form-control"
+                  value={filter.endTime}
+                  onChange={(e) => setFilter({ ...filter, endTime: e.target.value })}
+                />
+              </div>
+              <div className="col col-md-2">
+                <div className="d-flex gap-2">
+                  <button
+                    type="submit"
+                    onClick={handleSearch}
+                    className="btn btn-primary flex-fill"
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                    ) : (
+                      'Search'
+                    )}
+                  </button>
+                  <button 
+                    type="button"
+                    className="btn btn-secondary flex-fill" 
+                    onClick={handleClear}
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
             </div>
-            <div className="col-md-3 mb-2">
-              <label htmlFor="startTime" className="form-label">
-                Start Time:
-              </label>
-              <input
-                type="datetime-local"
-                id="startTime"
-                className="form-control"
-                value={filter.startTime}
-                onChange={(e) => setFilter({ ...filter, startTime: e.target.value })}
-              />
-            </div>
-            <div className="col-md-3 mb-2">
-              <label htmlFor="endTime" className="form-label">
-                End Time:
-              </label>
-              <input
-                type="datetime-local"
-                id="endTime"
-                className="form-control"
-                value={filter.endTime}
-                onChange={(e) => setFilter({ ...filter, endTime: e.target.value })}
-              />
-            </div>
-            <div className="col-md-1 d-flex align-items-end mb-2">
-              <button
-                className="btn btn-primary w-100"
-                onClick={handleSearch}
-                disabled={loading}
-              >
-                {loading ? (
-                  <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                ) : (
-                  'Search'
-                )}
-              </button>
-            </div>
-            <div className="col-md-1 d-flex align-items-end mb-2">
-              <button 
-                className="btn btn-secondary w-100" 
-                onClick={handleClear}
-              >
-                Clear
-              </button>
-            </div>
-          </div>
+          </form>
         </div>
       </header>
 
