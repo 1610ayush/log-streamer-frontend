@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import axios from 'axios';
 
-const BACKEND_URL = "https://6755-2405-201-d003-d80e-fb7c-ab03-d407-b361.ngrok-free.app";
+const BACKEND_URL = "http://ayush-test.superapi.tech:8080";
 
 const axiosInstance = axios.create({
   baseURL: BACKEND_URL,
